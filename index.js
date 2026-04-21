@@ -23,6 +23,99 @@ const GAMEMODES = [
     { name: '🔱 Spear Mace', value: 'spearmace' }
 ];
 
+const KIT_INFO = {
+    'hydro': {
+        name: '💧 Hydro',
+        emoji: '💧',
+        description: 'Fast water PvP',
+        items: '• Water Bucket ×1\n• Diamond Sword ×1\n• Fishing Rod ×1\n• Blocks ×32\n• Golden Apples ×8\n• Lava Bucket ×1',
+        focus: '👉 Focus: movement + clutch + knockback',
+        rules: '• Water buckets allowed\n• No crystal PvP\n• Speed II effect active',
+        difficulty: '⭐⭐⭐ Medium'
+    },
+    'smp': {
+        name: '🌍 SMP',
+        emoji: '🌍',
+        description: 'Normal survival PvP',
+        items: '• Diamond Sword ×1\n• Bow ×1\n• Arrows ×32\n• Water Bucket ×1\n• Steak ×32\n• Shield ×1\n• Golden Apples ×4',
+        focus: '👉 Balanced, beginner-friendly',
+        rules: '• Standard Minecraft PvP\n• All items allowed except crystal\n• No hacking or exploits',
+        difficulty: '⭐⭐ Easy'
+    },
+    'diapot': {
+        name: '💎 Diapot',
+        emoji: '💎',
+        description: 'Potion PvP',
+        items: '• Diamond Sword ×1\n• Splash Healing Potions ×16\n• Ender Pearls ×4\n• Steak ×16\n• Speed Potion ×1',
+        focus: '👉 Focus: healing timing',
+        rules: '• Diamond armor only\n• All potions allowed\n• No strength II',
+        difficulty: '⭐⭐⭐ Medium'
+    },
+    'noaxe': {
+        name: '🪓 No Axe',
+        emoji: '🪓',
+        description: 'Sword-only PvP',
+        items: '• Diamond Sword ×1\n• Fishing Rod ×1\n• Golden Apples ×6\n• Blocks ×32',
+        focus: '👉 No shield breaking, combo-based',
+        rules: '• Axes are BANNED\n• Swords only\n• No critical hits from axes',
+        difficulty: '⭐⭐ Easy'
+    },
+    'axe': {
+        name: '⚔️ Axe',
+        emoji: '⚔️',
+        description: 'Shield PvP',
+        items: '• Diamond Axe ×1\n• Shield ×1\n• Golden Apples ×6\n• Steak ×16',
+        focus: '👉 Timing > spam',
+        rules: '• Axes primary weapon\n• Shield usage allowed\n• No swords',
+        difficulty: '⭐⭐⭐⭐ Hard'
+    },
+    'uhc': {
+        name: '🏹 UHC',
+        emoji: '🏹',
+        description: 'Survival hardcore PvP',
+        items: '• Diamond Sword ×1\n• Bow ×1\n• Arrows ×64\n• Golden Apples ×3\n• Golden Heads ×2\n• Lava Bucket ×1\n• Water Bucket ×1\n• Blocks ×32',
+        focus: '👉 Strategy + aim',
+        rules: '• No natural regen\n• Golden apples give regen\n• Absorption hearts enabled',
+        difficulty: '⭐⭐⭐⭐ Hard'
+    },
+    'elytramace': {
+        name: '🦅 Elytra Mace',
+        emoji: '🦅',
+        description: 'Advanced aerial PvP',
+        items: '• Elytra ×1\n• Fireworks ×16\n• Mace ×1\n• Golden Apples ×6',
+        focus: '👉 Very high skill',
+        rules: '• Elytra + Mace only\n• No swords or axes\n• Fall damage multiplier active',
+        difficulty: '⭐⭐⭐⭐⭐ Very Hard'
+    },
+    'nethpot': {
+        name: '🧪 NethPot',
+        emoji: '🧪',
+        description: 'Tank + potion PvP',
+        items: '• Netherite Sword ×1\n• Splash Healing Potions ×20\n• Strength Potion ×1\n• Ender Pearls ×4',
+        focus: '👉 Long fights',
+        rules: '• All nether potions allowed\n• Strength II allowed\n• Instant damage pots banned',
+        difficulty: '⭐⭐⭐⭐ Hard'
+    },
+    'crystal': {
+        name: '💥 Crystal',
+        emoji: '💥',
+        description: 'End crystal PvP',
+        items: '• End Crystals ×64\n• Obsidian ×64\n• Respawn Anchors ×2 (optional)\n• Glowstone ×16\n• Totem of Undying ×1\n• Netherite Sword ×1',
+        focus: '👉 One mistake = death',
+        rules: '• End crystals allowed\n• Obsidian placing allowed\n• Anchor PvP banned',
+        difficulty: '⭐⭐⭐⭐⭐ Very Hard'
+    },
+    'spearmace': {
+        name: '🔱 Spear Mace',
+        emoji: '🔱',
+        description: 'Hybrid combat',
+        items: '• Trident ×1\n• Mace ×1\n• Water Bucket ×1\n• Golden Apples ×6\n• Blocks ×32',
+        focus: '👉 Versatile fighting',
+        rules: '• Tridents + Maces only\n• Loyalty tridents recommended\n• No swords',
+        difficulty: '⭐⭐⭐⭐ Hard'
+    }
+};
+
 client.once('ready', async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
     await registerCommands();
@@ -84,6 +177,21 @@ async function registerCommands() {
                 type: 6,
                 required: false
             }]
+        },
+        {
+            name: 'kitinfo',
+            description: 'Get detailed information about a specific kit',
+            options: [{
+                name: 'gamemode',
+                description: 'Choose the gamemode to learn about',
+                type: 3,
+                required: true,
+                choices: GAMEMODES
+            }]
+        },
+        {
+            name: 'kits',
+            description: 'List all available kits with basic info'
         }
     ];
 
@@ -177,7 +285,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: message, ephemeral: true });
     }
 
-    // /win command (winner reports)
+    // /win command
     if (interaction.commandName === 'win') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
@@ -216,7 +324,7 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
-    // /confirm command (loser confirms)
+    // /confirm command
     if (interaction.commandName === 'confirm') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
@@ -243,19 +351,16 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '❌ You are not in this match!', ephemeral: true });
         }
 
-        // Loser confirmed - match is valid
         match.confirmed = true;
         
         const winner = match.winnerReporter;
         const loser = match.player1 === winner ? match.player2 : match.player1;
         
-        // Update leaderboard
         if (!leaderboard[winner]) {
             leaderboard[winner] = { wins: 0, username: null };
         }
         leaderboard[winner].wins += 1;
         
-        // Get usernames
         try {
             const winnerMember = await interaction.guild.members.fetch(winner);
             leaderboard[winner].username = winnerMember.user.username;
@@ -265,7 +370,6 @@ client.on('interactionCreate', async interaction => {
         
         const winnerText = `🏆 **WINNER: <@${winner}>** (+1 win)`;
         
-        // Post to match-results channel with cool formatting
         const resultsChannel = interaction.guild.channels.cache.find(c => c.name === '📋┃match-results');
         if (resultsChannel) {
             await resultsChannel.send({
@@ -277,11 +381,9 @@ client.on('interactionCreate', async interaction => {
             content: `🎉 **GG! MATCH CONFIRMED!** 🎉\n━━━━━━━━━━━━━━━━━━━━\n📊 **Final Score:** ${match.pendingScore}\n${winnerText}\n━━━━━━━━━━━━━━━━━━━━\n> Well played both players! 💪\n🔒 This channel will close in **30 seconds**...`
         });
         
-        // Lock channel
         await interaction.channel.permissionOverwrites.edit(match.player1, { SendMessages: false });
         await interaction.channel.permissionOverwrites.edit(match.player2, { SendMessages: false });
         
-        // Delete after 30 seconds
         setTimeout(async () => {
             try {
                 const channel = interaction.guild.channels.cache.get(channelId);
@@ -345,6 +447,34 @@ client.on('interactionCreate', async interaction => {
         
         await interaction.reply({ content: message, ephemeral: true });
     }
+
+    // /kitinfo command
+    if (interaction.commandName === 'kitinfo') {
+        const gamemode = interaction.options.getString('gamemode');
+        const info = KIT_INFO[gamemode];
+        
+        if (!info) {
+            return interaction.reply({ content: '❌ Kit info not found!', ephemeral: true });
+        }
+        
+        const message = `**${info.emoji} ${info.name} KIT** ${info.emoji}\n━━━━━━━━━━━━━━━━━━━━\n📖 **Description:** ${info.description}\n━━━━━━━━━━━━━━━━━━━━\n🎒 **Items:**\n${info.items}\n━━━━━━━━━━━━━━━━━━━━\n🎯 **Focus:** ${info.focus}\n━━━━━━━━━━━━━━━━━━━━\n📜 **Rules:**\n${info.rules}\n━━━━━━━━━━━━━━━━━━━━\n📊 **Difficulty:** ${info.difficulty}\n━━━━━━━━━━━━━━━━━━━━\n⚡ Use \`/join gamemode:${gamemode}\` to queue!`;
+        
+        await interaction.reply({ content: message, ephemeral: false });
+    }
+
+    // /kits command
+    if (interaction.commandName === 'kits') {
+        let message = `**📚 AVAILABLE KITS** 📚\n━━━━━━━━━━━━━━━━━━━━\n`;
+        
+        for (const kit of GAMEMODES) {
+            const info = KIT_INFO[kit.value];
+            message += `\n**${info.emoji} ${info.name}**\n> ${info.description}\n> ${info.focus}\n> \`/kitinfo ${kit.value}\` | \`/join ${kit.value}\`\n`;
+        }
+        
+        message += `\n━━━━━━━━━━━━━━━━━━━━\n📌 Use \`/kitinfo <gamemode>\` for detailed info!`;
+        
+        await interaction.reply({ content: message, ephemeral: false });
+    }
 });
 
 async function createMatchChannel(interaction, gamemode, player1Id, player2Id) {
@@ -363,6 +493,7 @@ async function createMatchChannel(interaction, gamemode, player1Id, player2Id) {
     
     const player1 = await guild.members.fetch(player1Id);
     const player2 = await guild.members.fetch(player2Id);
+    const kitInfo = KIT_INFO[gamemode];
     
     const channelName = `${gamemode}-${player1.user.username}-vs-${player2.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32);
     
@@ -388,12 +519,11 @@ async function createMatchChannel(interaction, gamemode, player1Id, player2Id) {
     };
     
     await channel.send({
-        content: `🎮 **⚔️ MATCH STARTED! ⚔️**\n━━━━━━━━━━━━━━━━━━━━\n📦 **Gamemode:** ${gamemode}\n👥 **Combatants:** <@${player1Id}> 🆚 <@${player2Id}>\n━━━━━━━━━━━━━━━━━━━━\n\n**📜 HOW TO REPORT:**\n> 🏆 **WINNER:** Type \`/win 3-0\` (your score)\n> ❌ **LOSER:** Type \`/confirm\` to confirm your loss\n\n━━━━━━━━━━━━━━━━━━━━\n💬 **Chat here during the match!**\n⚡ **Good luck, have fun!** ⚡\n━━━━━━━━━━━━━━━━━━━━`
+        content: `🎮 **⚔️ MATCH STARTED! ⚔️**\n━━━━━━━━━━━━━━━━━━━━\n${kitInfo.emoji} **Gamemode:** ${kitInfo.name}\n👥 **Combatants:** <@${player1Id}> 🆚 <@${player2Id}>\n━━━━━━━━━━━━━━━━━━━━\n\n**📜 KIT INFO:**\n${kitInfo.focus}\n\n**🎒 ITEMS:**\n${kitInfo.items}\n━━━━━━━━━━━━━━━━━━━━\n\n**📜 HOW TO REPORT:**\n> 🏆 **WINNER:** Type \`/win 3-0\` (your score)\n> ❌ **LOSER:** Type \`/confirm\` to confirm your loss\n\n━━━━━━━━━━━━━━━━━━━━\n💬 **Chat here during the match!**\n⚡ **Good luck, have fun!** ⚡\n━━━━━━━━━━━━━━━━━━━━`
     });
     
     await channel.send(`🔔 <@${player1Id}> <@${player2Id}> - Fight! ⚔️`);
     
-    // Auto-delete after 12 hours
     setTimeout(async () => {
         try {
             const existingChannel = guild.channels.cache.get(channel.id);

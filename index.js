@@ -7,7 +7,8 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
 let queues = {};
-let matches = {}; // Store match info: { channelId: { player1, player2, gamemode, score, confirmed, winner } }
+let matches = {};
+let leaderboard = {};
 
 const GAMEMODES = [
     { name: '💧 Hydro', value: 'hydro' },
@@ -26,6 +27,7 @@ client.once('ready', async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
     await registerCommands();
     console.log(`✅ ${GAMEMODES.length} gamemodes available`);
+    console.log(`✅ Leaderboard ready with ${Object.keys(leaderboard).length} players`);
 });
 
 async function registerCommands() {
@@ -50,18 +52,38 @@ async function registerCommands() {
             description: 'Check who is waiting in each queue'
         },
         {
-            name: 'score',
-            description: 'Report match score (e.g., 3-0)',
+            name: 'win',
+            description: 'Report that you won the match (winner uses this)',
             options: [{
                 name: 'score',
-                description: 'Your score (e.g., 3-0)',
+                description: 'Your winning score (e.g., 3-0, 5-2)',
                 type: 3,
                 required: true
             }]
         },
         {
             name: 'confirm',
-            description: 'Confirm the reported score'
+            description: 'Confirm that you lost the match (loser confirms)'
+        },
+        {
+            name: 'leaderboard',
+            description: 'View the top players by wins',
+            options: [{
+                name: 'page',
+                description: 'Page number (1-10)',
+                type: 4,
+                required: false
+            }]
+        },
+        {
+            name: 'stats',
+            description: 'View your or another player\'s stats',
+            options: [{
+                name: 'player',
+                description: 'Player to view stats for (optional)',
+                type: 6,
+                required: false
+            }]
         }
     ];
 
@@ -155,8 +177,8 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: message, ephemeral: true });
     }
 
-    // /score command
-    if (interaction.commandName === 'score') {
+    // /win command (winner reports)
+    if (interaction.commandName === 'win') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
         const reportedScore = interaction.options.getString('score');
@@ -174,21 +196,27 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '❌ This match is already completed!', ephemeral: true });
         }
 
-        // Validate score format (e.g., 3-0, 5-2)
+        if (match.pendingWin) {
+            return interaction.reply({ content: '❌ A winner has already been reported! Waiting for confirmation.', ephemeral: true });
+        }
+
         if (!/^\d+-\d+$/.test(reportedScore)) {
-            return interaction.reply({ content: '❌ Invalid format! Use: `/score 3-0`', ephemeral: true });
+            return interaction.reply({ content: '❌ Invalid format! Use: `/win 3-0` (your winning score)', ephemeral: true });
         }
 
         match.pendingScore = reportedScore;
-        match.scoreReporter = userId;
+        match.winnerReporter = userId;
+        match.pendingWin = true;
+        
+        const loser = match.player1 === userId ? match.player2 : match.player1;
         
         await interaction.reply({ 
-            content: `📝 **${interaction.user.username}** reported score: **${reportedScore}**\n⏳ Waiting for opponent to confirm with \`/confirm\``,
+            content: `🏆 **${interaction.user.username}** claims victory!\n📊 Score: **${reportedScore}**\n👤 Loser: <@${loser}>\n━━━━━━━━━━━━━━━━━━━━\n⚠️ **${match.player1 === userId ? '<@' + match.player2 + '>' : '<@' + match.player1 + '>'}**, if this is correct, type \`/confirm\` to confirm your loss.\n\n❌ If incorrect, contact staff.`,
             ephemeral: false
         });
     }
 
-    // /confirm command
+    // /confirm command (loser confirms)
     if (interaction.commandName === 'confirm') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
@@ -203,52 +231,57 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '❌ Match already completed!', ephemeral: true });
         }
 
-        if (!match.pendingScore) {
-            return interaction.reply({ content: '❌ No score reported yet! Use `/score` first.', ephemeral: true });
+        if (!match.pendingWin) {
+            return interaction.reply({ content: '❌ No win reported yet! Winner must use `/win` first.', ephemeral: true });
         }
 
-        if (match.scoreReporter === userId) {
-            return interaction.reply({ content: '❌ You reported the score! Waiting for opponent to confirm.', ephemeral: true });
+        if (match.winnerReporter === userId) {
+            return interaction.reply({ content: '❌ You claimed the win! Waiting for opponent to confirm their loss.', ephemeral: true });
         }
 
         if (match.player1 !== userId && match.player2 !== userId) {
             return interaction.reply({ content: '❌ You are not in this match!', ephemeral: true });
         }
 
-        // Both confirmed! Lock the channel and post results
+        // Loser confirmed - match is valid
         match.confirmed = true;
         
-        // Determine winner
-        const [score1, score2] = match.pendingScore.split('-').map(Number);
-        const reporterIsPlayer1 = match.scoreReporter === match.player1;
-        const player1Score = reporterIsPlayer1 ? score1 : score2;
-        const player2Score = reporterIsPlayer1 ? score2 : score1;
+        const winner = match.winnerReporter;
+        const loser = match.player1 === winner ? match.player2 : match.player1;
         
-        let winner = null;
-        if (player1Score > player2Score) winner = match.player1;
-        else if (player2Score > player1Score) winner = match.player2;
-        else winner = 'tie';
+        // Update leaderboard
+        if (!leaderboard[winner]) {
+            leaderboard[winner] = { wins: 0, username: null };
+        }
+        leaderboard[winner].wins += 1;
         
-        const winnerText = winner === 'tie' ? '🤝 Tie!' : `🏆 Winner: <@${winner}>`;
+        // Get usernames
+        try {
+            const winnerMember = await interaction.guild.members.fetch(winner);
+            leaderboard[winner].username = winnerMember.user.username;
+        } catch (e) {
+            leaderboard[winner].username = winner;
+        }
         
-        // Post to match-results channel
+        const winnerText = `🏆 **WINNER: <@${winner}>** (+1 win)`;
+        
+        // Post to match-results channel with cool formatting
         const resultsChannel = interaction.guild.channels.cache.find(c => c.name === '📋┃match-results');
         if (resultsChannel) {
             await resultsChannel.send({
-                content: `**🎮 Match Result**\n━━━━━━━━━━━━━━━━━━━━\n📦 **Gamemode:** ${match.gamemode}\n👥 **Players:** <@${match.player1}> vs <@${match.player2}>\n📊 **Score:** ${match.pendingScore}\n${winnerText}\n✅ **Confirmed by both players**\n━━━━━━━━━━━━━━━━━━━━`
+                content: `🎉 **MATCH COMPLETE!** 🎉\n━━━━━━━━━━━━━━━━━━━━\n📦 **Gamemode:** ${match.gamemode}\n👥 **Battle:** <@${match.player1}> ⚔️ <@${match.player2}>\n📊 **Final Score:** ${match.pendingScore}\n${winnerText}\n✅ **Confirmed by both players**\n━━━━━━━━━━━━━━━━━━━━\n> GG WP! <@${winner}> shows great skill! 👏`
             });
         }
         
-        // Lock the channel
         await interaction.channel.send({
-            content: `✅ **Match confirmed!**\n📊 Final Score: ${match.pendingScore}\n${winnerText}\n🔒 This channel is now locked and will be deleted in 30 seconds.`
+            content: `🎉 **GG! MATCH CONFIRMED!** 🎉\n━━━━━━━━━━━━━━━━━━━━\n📊 **Final Score:** ${match.pendingScore}\n${winnerText}\n━━━━━━━━━━━━━━━━━━━━\n> Well played both players! 💪\n🔒 This channel will close in **30 seconds**...`
         });
         
-        // Update channel permissions to read-only
+        // Lock channel
         await interaction.channel.permissionOverwrites.edit(match.player1, { SendMessages: false });
         await interaction.channel.permissionOverwrites.edit(match.player2, { SendMessages: false });
         
-        // Delete channel after 30 seconds
+        // Delete after 30 seconds
         setTimeout(async () => {
             try {
                 const channel = interaction.guild.channels.cache.get(channelId);
@@ -259,7 +292,58 @@ client.on('interactionCreate', async interaction => {
             }
         }, 30000);
         
-        await interaction.reply({ content: '✅ Score confirmed! Channel will close in 30 seconds.', ephemeral: false });
+        await interaction.reply({ content: '✅ Loss confirmed! GG! Channel closing soon.', ephemeral: false });
+    }
+
+    // /leaderboard command
+    if (interaction.commandName === 'leaderboard') {
+        const page = interaction.options.getInteger('page') || 1;
+        const itemsPerPage = 10;
+        
+        const sorted = Object.entries(leaderboard)
+            .sort((a, b) => b[1].wins - a[1].wins);
+        
+        const totalPages = Math.ceil(sorted.length / itemsPerPage);
+        const start = (page - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageEntries = sorted.slice(start, end);
+        
+        if (pageEntries.length === 0) {
+            return interaction.reply({ 
+                content: '📭 No stats yet! Play some matches to appear on the leaderboard.', 
+                ephemeral: true 
+            });
+        }
+        
+        let message = `**🏆 LEADERBOARD - Page ${page}/${totalPages}** 🏆\n━━━━━━━━━━━━━━━━━━━━\n`;
+        let rank = start + 1;
+        
+        for (const [userId, data] of pageEntries) {
+            const username = data.username || userId;
+            const medal = rank === 1 ? '👑 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+            message += `\n**${rank}.** ${medal}${username} — 🎯 **${data.wins}** wins`;
+            rank++;
+        }
+        
+        message += `\n━━━━━━━━━━━━━━━━━━━━\n📌 Use \`/stats @player\` to see individual stats`;
+        
+        await interaction.reply({ content: message, ephemeral: true });
+    }
+
+    // /stats command
+    if (interaction.commandName === 'stats') {
+        const targetUser = interaction.options.getUser('player') || interaction.user;
+        const userId = targetUser.id;
+        
+        const stats = leaderboard[userId] || { wins: 0 };
+        const sorted = Object.entries(leaderboard).sort((a, b) => b[1].wins - a[1].wins);
+        const rank = sorted.findIndex(([id]) => id === userId) + 1;
+        
+        const medalIcon = rank === 1 ? '👑 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+        
+        const message = `**📊 ${targetUser.username}'S STATS** 📊\n━━━━━━━━━━━━━━━━━━━━\n🏆 **Wins:** ${stats.wins}\n🎯 **Rank:** ${medalIcon}${rank || 'Unranked'}${rank ? `/${sorted.length}` : ''}\n━━━━━━━━━━━━━━━━━━━━\n> Keep grinding! 💪`;
+        
+        await interaction.reply({ content: message, ephemeral: true });
     }
 });
 
@@ -293,28 +377,28 @@ async function createMatchChannel(interaction, gamemode, player1Id, player2Id) {
         ]
     });
     
-    // Store match info
     matches[channel.id] = {
         player1: player1Id,
         player2: player2Id,
         gamemode: gamemode,
         confirmed: false,
         pendingScore: null,
-        scoreReporter: null
+        winnerReporter: null,
+        pendingWin: false
     };
     
     await channel.send({
-        content: `🎮 **Match Started!**\n━━━━━━━━━━━━━━━━━━━━\n📦 **Gamemode:** ${gamemode}\n👥 **Players:** <@${player1Id}> vs <@${player2Id}>\n━━━━━━━━━━━━━━━━━━━━\n\n**How to report score:**\n1️⃣ Type \`/score 3-0\` (example)\n2️⃣ Opponent types \`/confirm\`\n3️⃣ Results go to 📋┃match-results\n4️⃣ Channel auto-closes\n\nGood luck! 🎯`
+        content: `🎮 **⚔️ MATCH STARTED! ⚔️**\n━━━━━━━━━━━━━━━━━━━━\n📦 **Gamemode:** ${gamemode}\n👥 **Combatants:** <@${player1Id}> 🆚 <@${player2Id}>\n━━━━━━━━━━━━━━━━━━━━\n\n**📜 HOW TO REPORT:**\n> 🏆 **WINNER:** Type \`/win 3-0\` (your score)\n> ❌ **LOSER:** Type \`/confirm\` to confirm your loss\n\n━━━━━━━━━━━━━━━━━━━━\n💬 **Chat here during the match!**\n⚡ **Good luck, have fun!** ⚡\n━━━━━━━━━━━━━━━━━━━━`
     });
     
-    await channel.send(`<@${player1Id}> <@${player2Id}>`);
+    await channel.send(`🔔 <@${player1Id}> <@${player2Id}> - Fight! ⚔️`);
     
-    // Auto-delete after 12 hours if no score reported
+    // Auto-delete after 12 hours
     setTimeout(async () => {
         try {
             const existingChannel = guild.channels.cache.get(channel.id);
             if (existingChannel && !matches[channel.id]?.confirmed) {
-                await existingChannel.send('⏰ Channel closing due to inactivity (12 hours).');
+                await existingChannel.send('⏰ **Channel closing due to inactivity (12 hours).**');
                 setTimeout(() => existingChannel.delete().catch(console.error), 5000);
                 delete matches[channel.id];
             }

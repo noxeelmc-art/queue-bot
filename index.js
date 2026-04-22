@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, REST, Routes, EmbedBuilder } = require('discord.js');
-const { createCanvas } = require('canvas');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
 
@@ -9,7 +8,7 @@ const GUILD_ID = process.env.GUILD_ID;
 
 let queues = {};
 let matches = {};
-let playerStats = {};   // replaces leaderboard, adds kitWins & region
+let playerStats = {};
 
 const GAMEMODES = [
     { name: '💧 Hydro', value: 'hydro' },
@@ -176,57 +175,6 @@ async function updatePlayerRank(member, userId, totalWins, kitWins) {
     return rank;
 }
 
-async function generateBattleCard(player, stats, rank, position, totalPlayers) {
-    const width = 800;
-    const height = 500;
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#0a0c10';
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = '#2c2f36';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, width-20, height-20);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px "Segoe UI"';
-    ctx.fillText(player.username, 30, 70);
-
-    ctx.font = '22px "Segoe UI"';
-    ctx.fillStyle = '#ffb347';
-    ctx.fillText(`${rank.name} (${stats.totalWins} points)`, 30, 120);
-
-    ctx.fillStyle = '#aaaaaa';
-    ctx.font = '20px "Segoe UI"';
-    ctx.fillText(`Region: ${stats.region || 'NA'}`, 30, 165);
-
-    ctx.strokeStyle = '#2c2f36';
-    ctx.beginPath();
-    ctx.moveTo(30, 185);
-    ctx.lineTo(width-30, 185);
-    ctx.stroke();
-
-    ctx.fillStyle = '#dddddd';
-    ctx.font = '18px monospace';
-    let kitLine = '';
-    for (const kit of GAMEMODES) {
-        const wins = stats.kitWins?.[kit.value] || 0;
-        kitLine += `${getKitRank(wins)} `;
-    }
-    ctx.fillText(kitLine.trim(), 30, 230);
-
-    ctx.font = '16px "Segoe UI"';
-    ctx.fillStyle = '#888888';
-    ctx.fillText(`Global Rank #${position} out of ${totalPlayers}`, 30, 290);
-
-    ctx.fillStyle = '#555555';
-    ctx.font = '14px "Segoe UI"';
-    ctx.fillText('Use /region to update your region', 30, height-40);
-
-    return canvas.toBuffer();
-}
-// ===================================================
-
 client.once('ready', async () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
     await registerCommands();
@@ -315,10 +263,9 @@ async function registerCommands() {
             name: 'kits',
             description: 'List all available kits with basic info'
         },
-        // ========== NEW COMMANDS ==========
         {
             name: 'battlecard',
-            description: 'View your personalized battle card (image)'
+            description: 'View your personalized battle card'
         },
         {
             name: 'rank',
@@ -338,56 +285,19 @@ async function registerCommands() {
             name: 'addwins',
             description: '[STAFF] Add wins to a player (updates rank automatically)',
             options: [
-                {
-                    name: 'player',
-                    description: 'The player to give wins to',
-                    type: 6,
-                    required: true
-                },
-                {
-                    name: 'amount',
-                    description: 'Number of wins to add (default 1)',
-                    type: 4,
-                    required: false
-                },
-                {
-                    name: 'kit',
-                    description: 'Specific kit to add wins to (optional)',
-                    type: 3,
-                    required: false,
-                    choices: GAMEMODES
-                }
+                { name: 'player', type: 6, required: true, description: 'The player to give wins to' },
+                { name: 'amount', type: 4, required: false, description: 'Number of wins to add (default 1)' },
+                { name: 'kit', type: 3, required: false, description: 'Specific kit to add wins to', choices: GAMEMODES }
             ]
         },
         {
             name: 'forcewin',
             description: '[STAFF] Manually register a match result',
             options: [
-                {
-                    name: 'winner',
-                    description: 'The winning player',
-                    type: 6,
-                    required: true
-                },
-                {
-                    name: 'loser',
-                    description: 'The losing player',
-                    type: 6,
-                    required: true
-                },
-                {
-                    name: 'gamemode',
-                    description: 'The kit played',
-                    type: 3,
-                    required: true,
-                    choices: GAMEMODES
-                },
-                {
-                    name: 'score',
-                    description: 'Final score (e.g., 3-0)',
-                    type: 3,
-                    required: true
-                }
+                { name: 'winner', type: 6, required: true, description: 'The winning player' },
+                { name: 'loser', type: 6, required: true, description: 'The losing player' },
+                { name: 'gamemode', type: 3, required: true, description: 'The kit played', choices: GAMEMODES },
+                { name: 'score', type: 3, required: true, description: 'Final score (e.g., 3-0)' }
             ]
         }
     ];
@@ -482,7 +392,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: message, ephemeral: true });
     }
 
-    // /win command (unchanged – only sets pending)
+    // /win command (unchanged)
     if (interaction.commandName === 'win') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
@@ -521,7 +431,7 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
-    // /confirm command (UPDATED: uses playerStats and rank system)
+    // /confirm command (updated with rank system)
     if (interaction.commandName === 'confirm') {
         const channelId = interaction.channelId;
         const userId = interaction.user.id;
@@ -554,18 +464,15 @@ client.on('interactionCreate', async interaction => {
         const loser = userId;
         const gamemode = match.gamemode;
         
-        // Initialize stats if needed
         if (!playerStats[winner]) playerStats[winner] = { totalWins: 0, kitWins: {}, region: 'NA' };
         if (!playerStats[loser]) playerStats[loser] = { totalWins: 0, kitWins: {}, region: 'NA' };
         
         playerStats[winner].totalWins += 1;
         playerStats[winner].kitWins[gamemode] = (playerStats[winner].kitWins[gamemode] || 0) + 1;
         
-        // Update rank role for winner
         const winnerMember = await interaction.guild.members.fetch(winner);
         const newRank = await updatePlayerRank(winnerMember, winner, playerStats[winner].totalWins, playerStats[winner].kitWins);
         
-        // Rank-up message
         const nextRankInfo = getNextRankInfo(newRank, playerStats[winner].totalWins);
         let rankUpMsg = '';
         if (nextRankInfo) {
@@ -603,7 +510,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: '✅ Loss confirmed! GG! Channel closing soon.', ephemeral: false });
     }
 
-    // /leaderboard command (UPDATED: uses playerStats, shows ranks)
+    // /leaderboard command (updated with ranks)
     if (interaction.commandName === 'leaderboard') {
         const page = interaction.options.getInteger('page') || 1;
         const itemsPerPage = 10;
@@ -643,7 +550,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.reply({ content: message, ephemeral: true });
     }
 
-    // /stats command (UPDATED: shows rank and kit breakdown)
+    // /stats command (updated with rank and kit breakdown)
     if (interaction.commandName === 'stats') {
         const targetUser = interaction.options.getUser('player') || interaction.user;
         const userId = targetUser.id;
@@ -700,14 +607,28 @@ client.on('interactionCreate', async interaction => {
     }
 
     // ========== NEW COMMAND HANDLERS ==========
-    // /battlecard (image)
+    
+    // /battlecard (embed version, no canvas)
     if (interaction.commandName === 'battlecard') {
         const stats = playerStats[interaction.user.id] || { totalWins: 0, kitWins: {}, region: 'NA' };
         const rank = getRank(stats.totalWins, stats.kitWins);
         const sorted = Object.entries(playerStats).sort((a,b) => b[1].totalWins - a[1].totalWins);
         const position = sorted.findIndex(([id]) => id === interaction.user.id) + 1;
-        const img = await generateBattleCard(interaction.user, stats, rank, position, sorted.length);
-        await interaction.reply({ files: [{ attachment: img, name: 'battlecard.png' }] });
+        
+        let kitLine = '';
+        for (const kit of GAMEMODES) {
+            const wins = stats.kitWins[kit.value] || 0;
+            kitLine += `${getKitRank(wins)} `;
+        }
+        
+        const embed = new EmbedBuilder()
+            .setColor(rank.name.includes('HT') ? 0xFFA500 : 0x00FF00)
+            .setTitle(`${interaction.user.username}`)
+            .setDescription(`**${rank.name} (${stats.totalWins} points)**\nRegion: ${stats.region || 'NA'}\n\n${kitLine.trim()}`)
+            .setFooter({ text: `Global Rank #${position} out of ${sorted.length} • Use /region to change your region` })
+            .setTimestamp();
+        
+        await interaction.reply({ embeds: [embed], ephemeral: false });
     }
 
     // /rank command

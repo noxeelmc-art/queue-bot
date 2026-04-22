@@ -609,27 +609,28 @@ client.on('interactionCreate', async interaction => {
     // ========== NEW COMMAND HANDLERS ==========
     
     // /battlecard (embed version, no canvas)
-    if (interaction.commandName === 'battlecard') {
-        const stats = playerStats[interaction.user.id] || { totalWins: 0, kitWins: {}, region: 'NA' };
-        const rank = getRank(stats.totalWins, stats.kitWins);
-        const sorted = Object.entries(playerStats).sort((a,b) => b[1].totalWins - a[1].totalWins);
-        const position = sorted.findIndex(([id]) => id === interaction.user.id) + 1;
-        
-        let kitLine = '';
-        for (const kit of GAMEMODES) {
-            const wins = stats.kitWins[kit.value] || 0;
-            kitLine += `${getKitRank(wins)} `;
-        }
-        
-        const embed = new EmbedBuilder()
-            .setColor(rank.name.includes('HT') ? 0xFFA500 : 0x00FF00)
-            .setTitle(`${interaction.user.username}`)
-            .setDescription(`**${rank.name} (${stats.totalWins} points)**\nRegion: ${stats.region || 'NA'}\n\n${kitLine.trim()}`)
-            .setFooter({ text: `Global Rank #${position} out of ${sorted.length} • Use /region to change your region` })
-            .setTimestamp();
-        
-        await interaction.reply({ embeds: [embed], ephemeral: false });
+if (interaction.commandName === 'battlecard') {
+    const stats = playerStats[interaction.user.id] || { totalWins: 0, kitWins: {}, region: 'NA' };
+    const rank = getRank(stats.totalWins, stats.kitWins);
+    const sorted = Object.entries(playerStats).sort((a,b) => b[1].totalWins - a[1].totalWins);
+    const position = sorted.findIndex(([id]) => id === interaction.user.id) + 1;
+
+    let kitLine = '';
+    for (const kit of GAMEMODES) {
+        const wins = stats.kitWins[kit.value] || 0;
+        const kitEmoji = KIT_INFO[kit.value].emoji;
+        kitLine += `${kitEmoji} ${getKitRank(wins)}  `;
     }
+
+    const embed = new EmbedBuilder()
+        .setColor(rank.name.includes('HT') ? 0xFFA500 : 0x00FF00)
+        .setTitle(`${interaction.user.username}`)
+        .setDescription(`**${rank.name} (${stats.totalWins} points)**\nRegion: ${stats.region || 'NA'}\n\n${kitLine.trim()}`)
+        .setFooter({ text: `Global Rank #${position} out of ${sorted.length} • Use /region to change your region` })
+        .setTimestamp();
+
+    await interaction.reply({ embeds: [embed], ephemeral: false });
+                                                    }
 
     // /rank command
     if (interaction.commandName === 'rank') {
